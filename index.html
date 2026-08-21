@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Commission Tracker</title>
+<style>
+  :root {
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #1a1d23;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --accent: #16a34a;
+    --accent-dark: #15803d;
+    --danger: #dc2626;
+  }
+  :root[data-theme="dark"] {
+    --bg: #14161a;
+    --card: #1e2126;
+    --text: #e7e9ec;
+    --muted: #9099a4;
+    --border: #2c3038;
+    --accent: #22c55e;
+    --accent-dark: #16a34a;
+    --danger: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 24px 16px 64px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+  }
+  .header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin: 0;
+  }
+  .theme-toggle {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0;
+    line-height: 1;
+  }
+  .theme-toggle:hover { border-color: var(--accent); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+  .totals {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  .totals .stat {
+    text-align: center;
+  }
+  .totals .stat .label {
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .totals .stat .value {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-top: 4px;
+  }
+  form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: flex-end;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 120px;
+  }
+  label {
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+  input {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    width: 100%;
+    background: var(--card);
+    color: var(--text);
+    color-scheme: light dark;
+  }
+  input:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 11px 18px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:hover { background: var(--accent-dark); }
+  .period-group {
+    margin-bottom: 24px;
+  }
+  .period-group:last-child {
+    margin-bottom: 0;
+  }
+  .period-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 8px;
+    margin-bottom: 4px;
+    border-bottom: 2px solid var(--border);
+  }
+  .period-range {
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .period-range .current-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    padding: 1px 8px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+  .period-subtotal {
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+  .entries {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .entries li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .entries li:last-child { border-bottom: none; }
+  .entry-date {
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+  .entry-amount {
+    font-weight: 600;
+    margin-left: auto;
+    margin-right: 16px;
+  }
+  .entry-actions {
+    display: flex;
+    gap: 4px;
+  }
+  .edit-btn, .delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 4px 8px;
+    font-weight: 500;
+  }
+  .edit-btn {
+    color: var(--muted);
+  }
+  .edit-btn:hover { color: var(--text); text-decoration: underline; }
+  .delete-btn {
+    color: var(--danger);
+  }
+  .delete-btn:hover { text-decoration: underline; }
+  .entries li.editing {
+    gap: 10px;
+  }
+  .entries li.editing input {
+    padding: 6px 8px;
+    font-size: 0.9rem;
+  }
+  .entries li.editing input[type="date"] {
+    flex: 1;
+    min-width: 0;
+  }
+  .entries li.editing input[type="number"] {
+    width: 90px;
+  }
+  .save-btn, .cancel-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.85rem;
+    padding: 4px 8px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .save-btn {
+    color: var(--accent);
+  }
+  .save-btn:hover { text-decoration: underline; }
+  .cancel-btn {
+    color: var(--muted);
+  }
+  .cancel-btn:hover { text-decoration: underline; }
+  .empty {
+    color: var(--muted);
+    text-align: center;
+    padding: 24px 0;
+    font-size: 0.9rem;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header-row">
+    <h1>Commission Tracker</h1>
+    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">🌙</button>
+  </div>
+
+  <div class="card">
+    <div class="totals">
+      <div class="stat">
+        <div class="label">This Pay Period</div>
+        <div class="value" id="periodTotal">$0.00</div>
+      </div>
+      <div class="stat">
+        <div class="label">All Time</div>
+        <div class="value" id="allTimeTotal">$0.00</div>
+      </div>
+      <div class="stat">
+        <div class="label">Entries</div>
+        <div class="value" id="entryCount">0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <form id="entryForm">
+      <div class="field">
+        <label for="date">Date</label>
+        <input type="date" id="date" required>
+      </div>
+      <div class="field">
+        <label for="amount">Amount ($)</label>
+        <input type="number" id="amount" step="0.01" min="0" placeholder="0.00" required>
+      </div>
+      <button type="submit">Add Entry</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <div id="entriesList"></div>
+  </div>
+</div>
+
+<script>
+  const STORAGE_KEY = 'commissionEntries';
+  const THEME_KEY = 'commissionTheme';
+
+  const themeToggle = document.getElementById('themeToggle');
+
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    themeToggle.textContent = theme === 'dark' ? '☀️' : '🌙';
+  }
+
+  function initTheme() {
+    const stored = localStorage.getItem(THEME_KEY);
+    const preferred = stored || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    applyTheme(preferred);
+  }
+
+  themeToggle.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    localStorage.setItem(THEME_KEY, next);
+    applyTheme(next);
+  });
+
+  initTheme();
+
+  const dateInput = document.getElementById('date');
+  const amountInput = document.getElementById('amount');
+  const form = document.getElementById('entryForm');
+  const entriesList = document.getElementById('entriesList');
+  const periodTotalEl = document.getElementById('periodTotal');
+  const allTimeTotalEl = document.getElementById('allTimeTotal');
+  const entryCountEl = document.getElementById('entryCount');
+
+  const DAY_MS = 86400000;
+  const PAY_PERIOD_ANCHOR = '2026-08-17';
+
+  function parseISODate(dateStr) {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return Date.UTC(y, m - 1, d);
+  }
+
+  function toISODate(ms) {
+    const d = new Date(ms);
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  function formatShortDate(ms) {
+    const [y, m, d] = toISODate(ms).split('-');
+    return `${m}/${d}`;
+  }
+
+  const anchorMs = parseISODate(PAY_PERIOD_ANCHOR);
+
+  function getPeriodStartMs(dateStr) {
+    const daysSinceAnchor = Math.floor((parseISODate(dateStr) - anchorMs) / DAY_MS);
+    const periodIndex = Math.floor(daysSinceAnchor / 14);
+    return anchorMs + periodIndex * 14 * DAY_MS;
+  }
+
+  dateInput.valueAsDate = new Date();
+
+  function loadEntries() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  function saveEntries(entries) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+  }
+
+  function formatCurrency(n) {
+    return n.toLocaleString('en-US', { style: 'currency', currency: 'USD' });
+  }
+
+  function formatDate(dateStr) {
+    const [y, m, d] = dateStr.split('-');
+    return `${m}/${d}/${y}`;
+  }
+
+  function render() {
+    const entries = loadEntries().sort((a, b) => b.date.localeCompare(a.date));
+
+    entriesList.innerHTML = '';
+
+    if (entries.length === 0) {
+      entriesList.innerHTML = '<div class="empty">No entries yet — add your first one above.</div>';
+    } else {
+      const groups = new Map();
+      for (const entry of entries) {
+        const periodStartMs = getPeriodStartMs(entry.date);
+        if (!groups.has(periodStartMs)) groups.set(periodStartMs, []);
+        groups.get(periodStartMs).push(entry);
+      }
+
+      const todayPeriodStartMs = getPeriodStartMs(toISODate(Date.now()));
+      const sortedPeriods = [...groups.keys()].sort((a, b) => b - a);
+
+      for (const periodStartMs of sortedPeriods) {
+        const periodEntries = groups.get(periodStartMs);
+        const periodEndMs = periodStartMs + 13 * DAY_MS;
+        const subtotal = periodEntries.reduce((sum, e) => sum + e.amount, 0);
+
+        const group = document.createElement('div');
+        group.className = 'period-group';
+
+        const header = document.createElement('div');
+        header.className = 'period-header';
+
+        const range = document.createElement('span');
+        range.className = 'period-range';
+        range.textContent = `${formatShortDate(periodStartMs)} – ${formatShortDate(periodEndMs)}`;
+        if (periodStartMs === todayPeriodStartMs) {
+          const badge = document.createElement('span');
+          badge.className = 'current-badge';
+          badge.textContent = 'CURRENT';
+          range.appendChild(badge);
+        }
+
+        const subtotalEl = document.createElement('span');
+        subtotalEl.className = 'period-subtotal';
+        subtotalEl.textContent = formatCurrency(subtotal);
+
+        header.appendChild(range);
+        header.appendChild(subtotalEl);
+        group.appendChild(header);
+
+        const ul = document.createElement('ul');
+        ul.className = 'entries';
+
+        for (const entry of periodEntries) {
+          ul.appendChild(createEntryLi(entry));
+        }
+
+        group.appendChild(ul);
+        entriesList.appendChild(group);
+      }
+    }
+
+    const allTime = entries.reduce((sum, e) => sum + e.amount, 0);
+    const currentPeriodStartMs = getPeriodStartMs(toISODate(Date.now()));
+    const periodTotal = entries
+      .filter(e => getPeriodStartMs(e.date) === currentPeriodStartMs)
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    allTimeTotalEl.textContent = formatCurrency(allTime);
+    periodTotalEl.textContent = formatCurrency(periodTotal);
+    entryCountEl.textContent = entries.length;
+  }
+
+  function deleteEntry(id) {
+    const entries = loadEntries().filter(e => e.id !== id);
+    saveEntries(entries);
+    render();
+  }
+
+  function updateEntry(id, date, amount) {
+    const entries = loadEntries();
+    const idx = entries.findIndex(e => e.id === id);
+    if (idx === -1) return;
+    entries[idx] = { ...entries[idx], date, amount };
+    saveEntries(entries);
+    render();
+  }
+
+  function createEntryLi(entry) {
+    const li = document.createElement('li');
+    renderViewRow(li, entry);
+    return li;
+  }
+
+  function renderViewRow(li, entry) {
+    li.className = '';
+    li.innerHTML = '';
+
+    const dateSpan = document.createElement('span');
+    dateSpan.className = 'entry-date';
+    dateSpan.textContent = formatDate(entry.date);
+
+    const amountSpan = document.createElement('span');
+    amountSpan.className = 'entry-amount';
+    amountSpan.textContent = formatCurrency(entry.amount);
+
+    const actions = document.createElement('span');
+    actions.className = 'entry-actions';
+
+    const editBtn = document.createElement('button');
+    editBtn.className = 'edit-btn';
+    editBtn.textContent = 'Edit';
+    editBtn.addEventListener('click', () => renderEditRow(li, entry));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'delete-btn';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => deleteEntry(entry.id));
+
+    actions.appendChild(editBtn);
+    actions.appendChild(deleteBtn);
+
+    li.appendChild(dateSpan);
+    li.appendChild(amountSpan);
+    li.appendChild(actions);
+  }
+
+  function renderEditRow(li, entry) {
+    li.className = 'editing';
+    li.innerHTML = '';
+
+    const editDateInput = document.createElement('input');
+    editDateInput.type = 'date';
+    editDateInput.value = entry.date;
+
+    const editAmountInput = document.createElement('input');
+    editAmountInput.type = 'number';
+    editAmountInput.step = '0.01';
+    editAmountInput.min = '0';
+    editAmountInput.value = entry.amount;
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'save-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', () => {
+      const newDate = editDateInput.value;
+      const newAmount = parseFloat(editAmountInput.value);
+      if (!newDate || isNaN(newAmount) || newAmount < 0) return;
+      updateEntry(entry.id, newDate, newAmount);
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'cancel-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', () => renderViewRow(li, entry));
+
+    li.appendChild(editDateInput);
+    li.appendChild(editAmountInput);
+    li.appendChild(saveBtn);
+    li.appendChild(cancelBtn);
+  }
+
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const date = dateInput.value;
+    const amount = parseFloat(amountInput.value);
+    if (!date || isNaN(amount) || amount < 0) return;
+
+    const entries = loadEntries();
+    entries.push({ id: crypto.randomUUID(), date, amount });
+    saveEntries(entries);
+
+    amountInput.value = '';
+    amountInput.focus();
+    render();
+  });
+
+  render();
+</script>
+</body>
+</html>
