@@ -64,6 +64,79 @@
     line-height: 1;
   }
   .theme-toggle:hover { border-color: var(--accent); }
+  .header-actions {
+    display: flex;
+    gap: 8px;
+  }
+  .icon-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 0;
+    line-height: 1;
+  }
+  .icon-btn:hover { border-color: var(--accent); }
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 10;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    width: 100%;
+    max-width: 400px;
+  }
+  .modal-card h2 {
+    margin: 0 0 16px;
+    font-size: 1.1rem;
+  }
+  .settings-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .settings-form .field {
+    min-width: 0;
+  }
+  .settings-form select {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    width: 100%;
+    background: var(--card);
+    color: var(--text);
+  }
+  .settings-hint {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: -2px 0 0;
+  }
+  .modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 8px;
+  }
+  .modal-actions .cancel-btn {
+    font-size: 1rem;
+    padding: 11px 18px;
+  }
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -251,13 +324,16 @@
 <div class="container">
   <div class="header-row">
     <h1>Commission Tracker</h1>
-    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">🌙</button>
+    <div class="header-actions">
+      <button type="button" class="icon-btn" id="settingsToggle" aria-label="Pay period settings">⚙️</button>
+      <button type="button" class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle dark mode">🌙</button>
+    </div>
   </div>
 
   <div class="card">
     <div class="totals">
       <div class="stat">
-        <div class="label">This Pay Period</div>
+        <div class="label" id="periodTotalLabel">This Pay Period</div>
         <div class="value" id="periodTotal">$0.00</div>
       </div>
       <div class="stat">
@@ -290,6 +366,40 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="settingsModal" hidden>
+  <div class="modal-card">
+    <h2>Pay Period Settings</h2>
+    <form id="settingsForm" class="settings-form">
+      <div class="field">
+        <label for="periodType">Pay period</label>
+        <select id="periodType">
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Bi-weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+
+      <div class="field" id="anchorField">
+        <label for="periodAnchor">Start date of a period</label>
+        <input type="date" id="periodAnchor">
+        <p class="settings-hint">Periods repeat from this date, e.g. pick a Friday for "every other Friday."</p>
+      </div>
+
+      <div class="field" id="monthDayField">
+        <label for="monthStartDay">Start day of month</label>
+        <input type="number" id="monthStartDay" min="1" max="28" step="1">
+        <p class="settings-hint">Use 1–28 so it applies consistently across months.</p>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="cancel-btn" id="settingsCancel">Cancel</button>
+        <button type="submit">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
   const STORAGE_KEY = 'commissionEntries';
   const THEME_KEY = 'commissionTheme';
@@ -316,16 +426,74 @@
 
   initTheme();
 
+  const settingsToggle = document.getElementById('settingsToggle');
+  const settingsModal = document.getElementById('settingsModal');
+  const settingsForm = document.getElementById('settingsForm');
+  const settingsCancel = document.getElementById('settingsCancel');
+  const periodTypeInput = document.getElementById('periodType');
+  const periodAnchorInput = document.getElementById('periodAnchor');
+  const monthStartDayInput = document.getElementById('monthStartDay');
+  const anchorField = document.getElementById('anchorField');
+  const monthDayField = document.getElementById('monthDayField');
+
+  function updateSettingsFieldVisibility() {
+    const type = periodTypeInput.value;
+    anchorField.hidden = type !== 'weekly' && type !== 'biweekly';
+    monthDayField.hidden = type !== 'monthly';
+  }
+
+  function openSettingsModal() {
+    periodTypeInput.value = paySettings.type;
+    periodAnchorInput.value = paySettings.anchorDate;
+    monthStartDayInput.value = paySettings.monthStartDay;
+    updateSettingsFieldVisibility();
+    settingsModal.hidden = false;
+  }
+
+  function closeSettingsModal() {
+    settingsModal.hidden = true;
+  }
+
+  settingsToggle.addEventListener('click', openSettingsModal);
+  settingsCancel.addEventListener('click', closeSettingsModal);
+  periodTypeInput.addEventListener('change', updateSettingsFieldVisibility);
+  settingsModal.addEventListener('click', (e) => {
+    if (e.target === settingsModal) closeSettingsModal();
+  });
+
+  settingsForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const type = periodTypeInput.value;
+    const settings = { type, anchorDate: paySettings.anchorDate, monthStartDay: paySettings.monthStartDay };
+
+    if (type === 'weekly' || type === 'biweekly') {
+      if (!periodAnchorInput.value) return;
+      settings.anchorDate = periodAnchorInput.value;
+    } else if (type === 'monthly') {
+      const day = parseInt(monthStartDayInput.value, 10);
+      if (isNaN(day) || day < 1 || day > 28) return;
+      settings.monthStartDay = day;
+    }
+
+    paySettings = settings;
+    savePaySettings(paySettings);
+    closeSettingsModal();
+    render();
+  });
+
   const dateInput = document.getElementById('date');
   const amountInput = document.getElementById('amount');
   const form = document.getElementById('entryForm');
   const entriesList = document.getElementById('entriesList');
   const periodTotalEl = document.getElementById('periodTotal');
+  const periodTotalLabelEl = document.getElementById('periodTotalLabel');
   const allTimeTotalEl = document.getElementById('allTimeTotal');
   const entryCountEl = document.getElementById('entryCount');
 
   const DAY_MS = 86400000;
-  const PAY_PERIOD_ANCHOR = '2026-08-17';
+  const PAY_SETTINGS_KEY = 'commissionPaySettings';
+  const DEFAULT_PAY_SETTINGS = { type: 'biweekly', anchorDate: '2026-08-17', monthStartDay: 1 };
+  const PERIOD_LABELS = { daily: 'Today', weekly: 'This Week', biweekly: 'This Pay Period', monthly: 'This Month' };
 
   function parseISODate(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number);
@@ -345,12 +513,76 @@
     return `${m}/${d}`;
   }
 
-  const anchorMs = parseISODate(PAY_PERIOD_ANCHOR);
+  function loadPaySettings() {
+    const raw = localStorage.getItem(PAY_SETTINGS_KEY);
+    if (!raw) return { ...DEFAULT_PAY_SETTINGS };
+    try {
+      const parsed = JSON.parse(raw);
+      return { ...DEFAULT_PAY_SETTINGS, ...parsed };
+    } catch {
+      return { ...DEFAULT_PAY_SETTINGS };
+    }
+  }
 
-  function getPeriodStartMs(dateStr) {
-    const daysSinceAnchor = Math.floor((parseISODate(dateStr) - anchorMs) / DAY_MS);
-    const periodIndex = Math.floor(daysSinceAnchor / 14);
-    return anchorMs + periodIndex * 14 * DAY_MS;
+  function savePaySettings(settings) {
+    localStorage.setItem(PAY_SETTINGS_KEY, JSON.stringify(settings));
+  }
+
+  let paySettings = loadPaySettings();
+
+  function getMonthlyPeriodStartMs(dateMs, startDay) {
+    const d = new Date(dateMs);
+    const y = d.getUTCFullYear();
+    const m = d.getUTCMonth();
+    const day = d.getUTCDate();
+    return day >= startDay ? Date.UTC(y, m, startDay) : Date.UTC(y, m - 1, startDay);
+  }
+
+  function getMonthlyPeriodEndMs(periodStartMs, startDay) {
+    const d = new Date(periodStartMs);
+    const nextStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, startDay);
+    return nextStart - DAY_MS;
+  }
+
+  function getPeriodStartMs(dateStr, settings) {
+    const dateMs = parseISODate(dateStr);
+    switch (settings.type) {
+      case 'daily':
+        return dateMs;
+      case 'weekly':
+      case 'biweekly': {
+        const lengthDays = settings.type === 'weekly' ? 7 : 14;
+        const anchorMs = parseISODate(settings.anchorDate);
+        const daysSinceAnchor = Math.floor((dateMs - anchorMs) / DAY_MS);
+        const periodIndex = Math.floor(daysSinceAnchor / lengthDays);
+        return anchorMs + periodIndex * lengthDays * DAY_MS;
+      }
+      case 'monthly':
+        return getMonthlyPeriodStartMs(dateMs, settings.monthStartDay);
+      default:
+        return dateMs;
+    }
+  }
+
+  function getPeriodEndMs(periodStartMs, settings) {
+    switch (settings.type) {
+      case 'daily':
+        return periodStartMs;
+      case 'weekly':
+        return periodStartMs + 6 * DAY_MS;
+      case 'biweekly':
+        return periodStartMs + 13 * DAY_MS;
+      case 'monthly':
+        return getMonthlyPeriodEndMs(periodStartMs, settings.monthStartDay);
+      default:
+        return periodStartMs;
+    }
+  }
+
+  function formatPeriodRange(periodStartMs, periodEndMs) {
+    return periodStartMs === periodEndMs
+      ? formatShortDate(periodStartMs)
+      : `${formatShortDate(periodStartMs)} – ${formatShortDate(periodEndMs)}`;
   }
 
   dateInput.valueAsDate = new Date();
@@ -383,17 +615,17 @@
     } else {
       const groups = new Map();
       for (const entry of entries) {
-        const periodStartMs = getPeriodStartMs(entry.date);
+        const periodStartMs = getPeriodStartMs(entry.date, paySettings);
         if (!groups.has(periodStartMs)) groups.set(periodStartMs, []);
         groups.get(periodStartMs).push(entry);
       }
 
-      const todayPeriodStartMs = getPeriodStartMs(toISODate(Date.now()));
+      const todayPeriodStartMs = getPeriodStartMs(toISODate(Date.now()), paySettings);
       const sortedPeriods = [...groups.keys()].sort((a, b) => b - a);
 
       for (const periodStartMs of sortedPeriods) {
         const periodEntries = groups.get(periodStartMs);
-        const periodEndMs = periodStartMs + 13 * DAY_MS;
+        const periodEndMs = getPeriodEndMs(periodStartMs, paySettings);
         const subtotal = periodEntries.reduce((sum, e) => sum + e.amount, 0);
 
         const group = document.createElement('div');
@@ -404,7 +636,7 @@
 
         const range = document.createElement('span');
         range.className = 'period-range';
-        range.textContent = `${formatShortDate(periodStartMs)} – ${formatShortDate(periodEndMs)}`;
+        range.textContent = formatPeriodRange(periodStartMs, periodEndMs);
         if (periodStartMs === todayPeriodStartMs) {
           const badge = document.createElement('span');
           badge.className = 'current-badge';
@@ -433,11 +665,12 @@
     }
 
     const allTime = entries.reduce((sum, e) => sum + e.amount, 0);
-    const currentPeriodStartMs = getPeriodStartMs(toISODate(Date.now()));
+    const currentPeriodStartMs = getPeriodStartMs(toISODate(Date.now()), paySettings);
     const periodTotal = entries
-      .filter(e => getPeriodStartMs(e.date) === currentPeriodStartMs)
+      .filter(e => getPeriodStartMs(e.date, paySettings) === currentPeriodStartMs)
       .reduce((sum, e) => sum + e.amount, 0);
 
+    periodTotalLabelEl.textContent = PERIOD_LABELS[paySettings.type] || 'This Pay Period';
     allTimeTotalEl.textContent = formatCurrency(allTime);
     periodTotalEl.textContent = formatCurrency(periodTotal);
     entryCountEl.textContent = entries.length;
