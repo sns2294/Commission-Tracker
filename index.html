@@ -211,6 +211,20 @@
     cursor: pointer;
   }
   button:hover { background: var(--accent-dark); }
+  @media (max-width: 480px) {
+    #entryForm {
+      flex-direction: column;
+      align-items: stretch;
+    }
+    #entryForm .field {
+      flex: none;
+      width: 100%;
+      min-width: 0;
+    }
+    #entryForm button {
+      width: 100%;
+    }
+  }
   .period-group {
     margin-bottom: 24px;
   }
