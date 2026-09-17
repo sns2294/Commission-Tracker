@@ -113,6 +113,13 @@
   .settings-form .field {
     min-width: 0;
   }
+  .settings-form input {
+    min-width: 0;
+  }
+  .settings-form input[type="date"] {
+    appearance: none;
+    -webkit-appearance: none;
+  }
   .settings-form select {
     padding: 10px 12px;
     border: 1px solid var(--border);
@@ -361,6 +368,87 @@
     padding: 24px 0;
     font-size: 0.9rem;
   }
+  .archive-btn,
+  .archive-btn:hover {
+    background: var(--card);
+    color: var(--text);
+  }
+  .archive-btn {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    height: 42px;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .archive-btn:hover { border-color: var(--accent); }
+  .archive-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    border-color: var(--border);
+  }
+  @media (max-width: 560px) {
+    /* the third header button crowds the title, so shrink it to stay on one line */
+    h1 { font-size: 1.25rem; }
+    .archive-btn-text { display: none; }
+    .archive-btn {
+      width: 42px;
+      padding: 0;
+      justify-content: center;
+      font-size: 1.1rem;
+    }
+  }
+  .archive-confirm-text {
+    margin: 0 0 20px;
+    font-size: 0.95rem;
+    line-height: 1.45;
+  }
+  #archiveCard[hidden] { display: none; }
+  .archive-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    cursor: pointer;
+    user-select: none;
+  }
+  .archive-title h2 {
+    margin: 0;
+    font-size: 1rem;
+  }
+  .archive-count {
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+  .archive-body {
+    margin-top: 20px;
+  }
+  .archive-body[hidden] { display: none; }
+  .year-meta {
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 400;
+    margin-left: 8px;
+  }
+  .year-entries {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+  .year-entries[hidden] { display: none; }
+  .year-entries li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .year-entries li:last-child { border-bottom: none; }
 </style>
 </head>
 <body>
@@ -368,6 +456,9 @@
   <div class="header-row">
     <h1>Commission Tracker</h1>
     <div class="header-actions">
+      <button type="button" class="archive-btn" id="archiveToggle" aria-label="Archive Year" title="Archive Year">
+        <span aria-hidden="true">📦</span><span class="archive-btn-text">Archive Year</span>
+      </button>
       <button type="button" class="icon-btn" id="settingsToggle" aria-label="Pay period settings">⚙️</button>
       <button type="button" class="icon-btn theme-toggle" id="themeToggle" aria-label="Toggle dark mode">🌙</button>
     </div>
@@ -407,6 +498,16 @@
   <div class="card">
     <div id="entriesList"></div>
   </div>
+
+  <div class="card" id="archiveCard" hidden>
+    <div class="archive-title" id="archiveTitle" role="button" tabindex="0" aria-expanded="false">
+      <h2><span class="period-chevron" id="archiveChevron" aria-hidden="true">▶</span>Archived Years</h2>
+      <span class="archive-count" id="archiveCount"></span>
+    </div>
+    <div class="archive-body" id="archiveBody" hidden>
+      <div id="archiveList"></div>
+    </div>
+  </div>
 </div>
 
 <div class="modal-overlay" id="settingsModal" hidden>
@@ -443,8 +544,20 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="archiveModal" hidden>
+  <div class="modal-card">
+    <h2>Archive Year</h2>
+    <p class="archive-confirm-text" id="archiveConfirmText"></p>
+    <div class="modal-actions">
+      <button type="button" class="cancel-btn" id="archiveCancel">Cancel</button>
+      <button type="button" id="archiveConfirm">Archive</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const STORAGE_KEY = 'commissionEntries';
+  const ARCHIVE_KEY = 'commissionArchivedYears';
   const THEME_KEY = 'commissionTheme';
 
   const themeToggle = document.getElementById('themeToggle');
@@ -756,6 +869,10 @@
     allTimeTotalEl.textContent = formatCurrency(allTime);
     periodTotalEl.textContent = formatCurrency(periodTotal);
     entryCountEl.textContent = entries.length;
+
+    archiveToggle.disabled = entries.length === 0;
+    archiveToggle.title = entries.length === 0 ? 'Nothing to archive yet' : 'Archive Year';
+    renderArchives();
   }
 
   function deleteEntry(id) {
@@ -846,6 +963,211 @@
     li.appendChild(saveBtn);
     li.appendChild(cancelBtn);
   }
+
+  const archiveToggle = document.getElementById('archiveToggle');
+  const archiveModal = document.getElementById('archiveModal');
+  const archiveConfirmText = document.getElementById('archiveConfirmText');
+  const archiveConfirm = document.getElementById('archiveConfirm');
+  const archiveCancel = document.getElementById('archiveCancel');
+  const archiveCard = document.getElementById('archiveCard');
+  const archiveTitle = document.getElementById('archiveTitle');
+  const archiveChevron = document.getElementById('archiveChevron');
+  const archiveCount = document.getElementById('archiveCount');
+  const archiveBody = document.getElementById('archiveBody');
+  const archiveList = document.getElementById('archiveList');
+
+  const expandedYears = new Set();
+  let archiveExpanded = false;
+
+  function loadArchives() {
+    const raw = localStorage.getItem(ARCHIVE_KEY);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveArchives(archives) {
+    localStorage.setItem(ARCHIVE_KEY, JSON.stringify(archives));
+  }
+
+  function yearOf(dateStr) {
+    return dateStr.slice(0, 4);
+  }
+
+  function formatYearList(years) {
+    if (years.length === 1) return years[0];
+    if (years.length === 2) return `${years[0]} and ${years[1]}`;
+    return `${years.slice(0, -1).join(', ')}, and ${years[years.length - 1]}`;
+  }
+
+  function openArchiveModal() {
+    const entries = loadEntries();
+    if (entries.length === 0) return;
+    const years = [...new Set(entries.map(e => yearOf(e.date)))].sort();
+    archiveConfirmText.textContent =
+      `Archive all ${formatYearList(years)} entries? This will move them out of your active tracker.`;
+    archiveModal.hidden = false;
+    archiveConfirm.focus();
+  }
+
+  function closeArchiveModal() {
+    archiveModal.hidden = true;
+  }
+
+  function archiveEntries() {
+    const entries = loadEntries();
+    if (entries.length === 0) return;
+
+    const archives = loadArchives();
+    const byYear = new Map(archives.map(a => [a.year, a]));
+    const archivedAt = new Date().toISOString();
+
+    for (const entry of entries) {
+      const year = yearOf(entry.date);
+      let bucket = byYear.get(year);
+      if (!bucket) {
+        bucket = { year, archivedAt, entries: [] };
+        byYear.set(year, bucket);
+        archives.push(bucket);
+      }
+      if (bucket.entries.some(e => e.id === entry.id)) continue;
+      bucket.entries.push({ ...entry, year });
+      bucket.archivedAt = archivedAt;
+    }
+
+    saveArchives(archives);
+    saveEntries([]);
+
+    expandedPeriods.clear();
+    expandedInitialized = false;
+    archiveExpanded = true;
+    render();
+  }
+
+  function createArchivedEntryLi(entry) {
+    const li = document.createElement('li');
+
+    const dateSpan = document.createElement('span');
+    dateSpan.className = 'entry-date';
+    dateSpan.textContent = formatDate(entry.date);
+
+    const amountSpan = document.createElement('span');
+    amountSpan.className = 'entry-amount';
+    amountSpan.textContent = formatCurrency(entry.amount);
+
+    li.appendChild(dateSpan);
+    li.appendChild(amountSpan);
+    return li;
+  }
+
+  function renderArchives() {
+    const archives = loadArchives().sort((a, b) => b.year.localeCompare(a.year));
+
+    archiveCard.hidden = archives.length === 0;
+    archiveList.innerHTML = '';
+    if (archives.length === 0) return;
+
+    archiveCount.textContent = archives.length === 1 ? '1 year' : `${archives.length} years`;
+    archiveBody.hidden = !archiveExpanded;
+    archiveChevron.classList.toggle('expanded', archiveExpanded);
+    archiveTitle.setAttribute('aria-expanded', String(archiveExpanded));
+
+    for (const archive of archives) {
+      const yearEntries = [...archive.entries].sort((a, b) => b.date.localeCompare(a.date));
+      const total = yearEntries.reduce((sum, e) => sum + e.amount, 0);
+      const isExpanded = expandedYears.has(archive.year);
+
+      const group = document.createElement('div');
+      group.className = 'period-group';
+
+      const header = document.createElement('div');
+      header.className = 'period-header';
+      header.setAttribute('role', 'button');
+      header.setAttribute('tabindex', '0');
+      header.setAttribute('aria-expanded', String(isExpanded));
+
+      const chevron = document.createElement('span');
+      chevron.className = 'period-chevron' + (isExpanded ? ' expanded' : '');
+      chevron.textContent = '▶';
+      chevron.setAttribute('aria-hidden', 'true');
+
+      const range = document.createElement('span');
+      range.className = 'period-range';
+      range.appendChild(chevron);
+      range.appendChild(document.createTextNode(archive.year));
+
+      const meta = document.createElement('span');
+      meta.className = 'year-meta';
+      meta.textContent = yearEntries.length === 1 ? '1 entry' : `${yearEntries.length} entries`;
+      range.appendChild(meta);
+
+      const totalEl = document.createElement('span');
+      totalEl.className = 'period-subtotal';
+      totalEl.textContent = formatCurrency(total);
+
+      header.appendChild(range);
+      header.appendChild(totalEl);
+      group.appendChild(header);
+
+      const ul = document.createElement('ul');
+      ul.className = 'year-entries';
+      ul.hidden = !isExpanded;
+      for (const entry of yearEntries) {
+        ul.appendChild(createArchivedEntryLi(entry));
+      }
+
+      group.appendChild(ul);
+      archiveList.appendChild(group);
+
+      const toggleYear = () => {
+        if (expandedYears.has(archive.year)) {
+          expandedYears.delete(archive.year);
+        } else {
+          expandedYears.add(archive.year);
+        }
+        const nowExpanded = expandedYears.has(archive.year);
+        ul.hidden = !nowExpanded;
+        chevron.classList.toggle('expanded', nowExpanded);
+        header.setAttribute('aria-expanded', String(nowExpanded));
+      };
+
+      header.addEventListener('click', toggleYear);
+      header.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          toggleYear();
+        }
+      });
+    }
+  }
+
+  function toggleArchiveSection() {
+    archiveExpanded = !archiveExpanded;
+    archiveBody.hidden = !archiveExpanded;
+    archiveChevron.classList.toggle('expanded', archiveExpanded);
+    archiveTitle.setAttribute('aria-expanded', String(archiveExpanded));
+  }
+
+  archiveToggle.addEventListener('click', openArchiveModal);
+  archiveCancel.addEventListener('click', closeArchiveModal);
+  archiveConfirm.addEventListener('click', () => {
+    archiveEntries();
+    closeArchiveModal();
+  });
+  archiveModal.addEventListener('click', (e) => {
+    if (e.target === archiveModal) closeArchiveModal();
+  });
+  archiveTitle.addEventListener('click', toggleArchiveSection);
+  archiveTitle.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleArchiveSection();
+    }
+  });
 
   form.addEventListener('submit', (e) => {
     e.preventDefault();
